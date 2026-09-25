@@ -28,6 +28,10 @@ func (s *server) list(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_path", "That folder path is invalid.")
 		return
 	}
+	if !currentPrincipal(r).visible(clean) {
+		writeError(w, 403, "forbidden", "This folder is not shared with you.")
+		return
+	}
 	if err := s.rejectSymlink(clean, false); err != nil {
 		s.fsError(w, err)
 		return
@@ -65,6 +69,9 @@ func (s *server) list(w http.ResponseWriter, r *http.Request) {
 		if err != nil || li.Mode()&os.ModeSymlink != 0 {
 			continue
 		}
+		if !currentPrincipal(r).visible(rel) {
+			continue
+		}
 		typ := ""
 		if li.IsDir() {
 			typ = "dir"
@@ -79,6 +86,14 @@ func (s *server) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) file(w http.ResponseWriter, r *http.Request) {
+	clean, err := cleanRequestPath(r.URL.Query().Get("path"), false)
+	if err != nil {
+		writeError(w, 400, "bad_path", "That file path is invalid.")
+		return
+	}
+	if !requireAccess(w, r, clean, false) {
+		return
+	}
 	s.servePath(w, r, r.URL.Query().Get("path"))
 }
 
@@ -121,6 +136,7 @@ type linkRequest struct {
 type linkPayload struct {
 	Path    string `json:"p"`
 	Expires int64  `json:"e"`
+	Owner   string `json:"o,omitempty"`
 }
 
 func (s *server) createLink(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +147,9 @@ func (s *server) createLink(w http.ResponseWriter, r *http.Request) {
 	clean, err := cleanRequestPath(req.Path, false)
 	if err != nil {
 		writeError(w, 400, "bad_path", "That file path is invalid.")
+		return
+	}
+	if !requireAccess(w, r, clean, false) {
 		return
 	}
 	if err := s.rejectSymlink(clean, false); err != nil {
@@ -147,7 +166,7 @@ func (s *server) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expires := time.Now().Add(s.cfg.linkTTL).UTC()
-	payload, _ := json.Marshal(linkPayload{Path: displayPath(clean), Expires: expires.Unix()})
+	payload, _ := json.Marshal(linkPayload{Path: displayPath(clean), Expires: expires.Unix(), Owner: currentPrincipal(r).user.ID})
 	mac := hmac.New(sha256.New, s.linkKey)
 	mac.Write(payload)
 	token := base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
@@ -174,6 +193,18 @@ func (s *server) signedFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized", "This streaming link has expired.")
 		return
 	}
+	if p.Owner == "" || p.Owner == "legacy" {
+		if s.users.initialized() && !s.cfg.allowLegacyKey {
+			writeError(w, 401, "unauthorized", "This old link is no longer valid.")
+			return
+		}
+	} else {
+		clean, err := cleanRequestPath(p.Path, false)
+		if err != nil || !s.users.userCanRead(p.Owner, clean) {
+			writeError(w, 403, "forbidden", "This link is no longer shared.")
+			return
+		}
+	}
 	s.servePath(w, r, p.Path)
 }
 
@@ -187,6 +218,9 @@ func (s *server) mkdir(w http.ResponseWriter, r *http.Request) {
 	clean, err := cleanRequestPath(req.Path, false)
 	if err != nil {
 		writeError(w, 400, "bad_path", "That folder path is invalid.")
+		return
+	}
+	if !requireAccess(w, r, clean, true) {
 		return
 	}
 	if info, err := s.root.Lstat(clean); err == nil {
@@ -225,6 +259,9 @@ func (s *server) move(w http.ResponseWriter, r *http.Request) {
 	to, e2 := cleanRequestPath(req.To, false)
 	if e1 != nil || e2 != nil {
 		writeError(w, 400, "bad_path", "A source or destination path is invalid.")
+		return
+	}
+	if !requireAccess(w, r, from, true) || !requireAccess(w, r, to, true) {
 		return
 	}
 	if err := s.rejectSymlink(from, false); err != nil {
@@ -268,6 +305,9 @@ func (s *server) deleteEntry(w http.ResponseWriter, r *http.Request) {
 	clean, err := cleanRequestPath(r.URL.Query().Get("path"), false)
 	if err != nil {
 		writeError(w, 400, "bad_path", "That item path is invalid.")
+		return
+	}
+	if !requireAccess(w, r, clean, true) {
 		return
 	}
 	if err := s.rejectSymlink(clean, false); err != nil {

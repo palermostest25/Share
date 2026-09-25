@@ -6,6 +6,9 @@ final class SettingsStore: ObservableObject {
     @Published var serverURL: String
     @Published var localURL: String
     @Published var accessKey: String
+	@Published var username: String
+	@Published var password: String
+	@Published var sessionToken: String
     @Published var cloudflareClientID: String
     @Published var cloudflareClientSecret: String
     @Published var externalPlayerPath: String
@@ -14,13 +17,16 @@ final class SettingsStore: ObservableObject {
         serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://share.denby.dev"
         localURL = UserDefaults.standard.string(forKey: "localURL") ?? ""
         accessKey = Keychain.read("access-key")
+		username = UserDefaults.standard.string(forKey: "username") ?? ""
+		password = Keychain.read("account-password")
+		sessionToken = Keychain.read("session-token")
         cloudflareClientID = UserDefaults.standard.string(forKey: "cloudflareClientID") ?? ""
         cloudflareClientSecret = Keychain.read("cloudflare-client-secret")
         externalPlayerPath = UserDefaults.standard.string(forKey: "externalPlayerPath") ?? Self.detectPlayer()
     }
 
     var isConfigured: Bool {
-        URL(string: serverURL)?.scheme == "https" && accessKey.count >= 32
+		URL(string: serverURL)?.scheme == "https" && ((username.count >= 2 && password.count >= 12) || accessKey.count >= 32)
     }
 
     func save() {
@@ -31,16 +37,19 @@ final class SettingsStore: ObservableObject {
         UserDefaults.standard.set(cloudflareClientID, forKey: "cloudflareClientID")
         UserDefaults.standard.set(externalPlayerPath, forKey: "externalPlayerPath")
         Keychain.write(accessKey, account: "access-key")
+		UserDefaults.standard.set(username, forKey: "username")
+		Keychain.write(password, account: "account-password")
+		Keychain.write(sessionToken, account: "session-token")
         Keychain.write(cloudflareClientSecret, account: "cloudflare-client-secret")
     }
 
     func snapshot(local: Bool = false) throws -> ConnectionSettings {
         if local {
             guard let url = localAddress else { throw ShareError.invalidURL }
-            return ConnectionSettings(baseURL: url, accessKey: accessKey, cloudflareClientID: "", cloudflareClientSecret: "")
+			return ConnectionSettings(baseURL: url, accessKey: username.isEmpty ? accessKey : sessionToken, cloudflareClientID: "", cloudflareClientSecret: "")
         }
         guard let url = URL(string: serverURL), url.scheme == "https", url.host != nil else { throw ShareError.invalidURL }
-        return ConnectionSettings(baseURL: url, accessKey: accessKey, cloudflareClientID: cloudflareClientID, cloudflareClientSecret: cloudflareClientSecret)
+		return ConnectionSettings(baseURL: url, accessKey: username.isEmpty ? accessKey : sessionToken, cloudflareClientID: cloudflareClientID, cloudflareClientSecret: cloudflareClientSecret)
     }
 
     var localAddress: URL? {

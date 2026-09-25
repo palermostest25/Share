@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import NetFS
 import UniformTypeIdentifiers
@@ -28,6 +29,7 @@ final class BrowserViewModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
     private var usingLocal = false
+	private var signedInCredentials = ""
     private var pendingUploads: [PendingFile] = []
     private var activeUploadTasks: [UUID: Task<Void, Never>] = [:]
     private var retryableUploads: [UUID: PendingFile] = [:]
@@ -69,30 +71,47 @@ final class BrowserViewModel: ObservableObject {
         Task { await refresh() }
     }
 
+	private func ensureSignedIn() async throws {
+		guard !settings.username.isEmpty else { return }
+		let digest = SHA256.hash(data: Data((settings.username + "\0" + settings.password).utf8)).map { String(format: "%02x", $0) }.joined()
+		if signedInCredentials == digest && !settings.sessionToken.isEmpty { return }
+		let token: String
+		do { token = try await api.login(username: settings.username, password: settings.password, settings: settings.snapshot()) }
+		catch ShareError.unauthorized { throw ShareError.unauthorized }
+		catch {
+			guard settings.localAddress != nil else { throw error }
+			token = try await api.login(username: settings.username, password: settings.password, settings: settings.snapshot(local: true))
+		}
+		settings.sessionToken = token
+		settings.save()
+		signedInCredentials = digest
+	}
+
     func showInFinder() {
         guard !isMountingFinder else { return }
         isMountingFinder = true
         Task {
             defer { isMountingFinder = false }
             do {
+				try await ensureSignedIn()
                 let connection: ConnectionSettings
-                if settings.localAddress != nil,
-                   let local = try? settings.snapshot(local: true),
-                   (try? await api.list("/", settings: local, timeout: 2)) != nil {
-                    connection = local
-                } else {
-                    connection = try settings.snapshot()
-                    if !settings.cloudflareClientID.isEmpty {
-                        throw ShareError.finderAccessUnsupported
-                    }
-                }
+				let remote = try settings.snapshot()
+				let remoteAvailable: Bool
+				if settings.cloudflareClientID.isEmpty { remoteAvailable = (try? await api.list("/", settings: remote, timeout: 3)) != nil }
+				else { remoteAvailable = false }
+				if remoteAvailable { connection = remote }
+				else if let local = try? settings.snapshot(local: true) {
+					_ = try await api.list("/", settings: local, timeout: 2)
+					connection = local
+				} else { throw settings.cloudflareClientID.isEmpty ? ShareError.invalidURL : ShareError.finderAccessUnsupported }
                 guard let davURL = URL(string: "/Share/", relativeTo: connection.baseURL)?.absoluteURL else {
                     throw ShareError.invalidURL
                 }
-                let key = connection.accessKey
+				let key = connection.accessKey
+				let davUsername = settings.username.isEmpty ? "share" : settings.username
                 let mountedPath = try await Task.detached(priority: .userInitiated) { () throws -> String in
                     var points: Unmanaged<CFArray>?
-                    let status = NetFSMountURLSync(davURL as CFURL, nil, "share" as CFString, key as CFString, nil, nil, &points)
+					let status = NetFSMountURLSync(davURL as CFURL, nil, davUsername as CFString, key as CFString, nil, nil, &points)
                     guard status == 0 else { throw ShareError.finderMountFailed(Int(status)) }
                     guard let path = (points?.takeRetainedValue() as? [String])?.first else {
                         throw ShareError.finderMountFailed(-1)
@@ -111,6 +130,7 @@ final class BrowserViewModel: ObservableObject {
         if !silently { isLoading = true }
         defer { isLoading = false }
         do {
+			try await ensureSignedIn()
             let result: ListResponse
             if settings.localAddress != nil {
                 do {
@@ -130,7 +150,7 @@ final class BrowserViewModel: ObservableObject {
             connectionLabel = "Remote"
             entries = result.entries
             errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+		} catch { if case ShareError.unauthorized = error { signedInCredentials = ""; settings.sessionToken = ""; settings.save() }; errorMessage = error.localizedDescription }
     }
 
     func navigate(to newPath: String) async {

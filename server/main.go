@@ -32,14 +32,16 @@ import (
 
 //go:embed web/*
 var webFiles embed.FS
+var version = "1.2.0"
 
 type config struct {
-	accessKey string
-	dataDir   string
-	listen    string
-	chunkSize int64
-	linkTTL   time.Duration
-	uploadTTL time.Duration
+	accessKey      string
+	allowLegacyKey bool
+	dataDir        string
+	listen         string
+	chunkSize      int64
+	linkTTL        time.Duration
+	uploadTTL      time.Duration
 }
 
 type server struct {
@@ -49,6 +51,7 @@ type server struct {
 	started     time.Time
 	limiter     *authLimiter
 	uploadLocks sync.Map
+	users       *userStore
 }
 
 func main() {
@@ -76,6 +79,10 @@ func main() {
 	mac := hmac.New(sha256.New, []byte(cfg.accessKey))
 	mac.Write([]byte("share-link-v1"))
 	s := &server{cfg: cfg, root: root, linkKey: mac.Sum(nil), started: time.Now(), limiter: newAuthLimiter()}
+	s.users, err = loadUsers(root, cfg.accessKey)
+	if err != nil {
+		log.Fatalf("load users: %v", err)
+	}
 	s.cleanupUploads()
 	go s.cleanupLoop()
 
@@ -104,12 +111,13 @@ func main() {
 
 func loadConfig() (config, error) {
 	c := config{
-		accessKey: os.Getenv("ACCESS_KEY"),
-		dataDir:   envOr("DATA_DIR", "/data"),
-		listen:    envOr("LISTEN_ADDR", ":8080"),
-		chunkSize: 32 << 20,
-		linkTTL:   12 * time.Hour,
-		uploadTTL: 24 * time.Hour,
+		accessKey:      os.Getenv("ACCESS_KEY"),
+		allowLegacyKey: os.Getenv("ALLOW_LEGACY_KEY") == "true",
+		dataDir:        envOr("DATA_DIR", "/data"),
+		listen:         envOr("LISTEN_ADDR", ":8080"),
+		chunkSize:      32 << 20,
+		linkTTL:        12 * time.Hour,
+		uploadTTL:      24 * time.Hour,
 	}
 	if len(c.accessKey) < 32 {
 		return c, errors.New("ACCESS_KEY is required and must be at least 32 characters")
@@ -174,6 +182,7 @@ func healthcheck() {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"version": version}) })
 	mux.HandleFunc("GET /", s.web)
 	mux.HandleFunc("GET /assets/", s.web)
 	mux.HandleFunc("GET /s/{token}/{filename}", s.signedFile)
@@ -183,6 +192,15 @@ func (s *server) routes() http.Handler {
 		mux.Handle(method+" /Share/", dav)
 	}
 	mux.Handle("GET /api/v1/list", s.auth(http.HandlerFunc(s.list)))
+	mux.HandleFunc("GET /api/v1/setup/status", s.setupStatus)
+	mux.HandleFunc("POST /api/v1/setup", s.setup)
+	mux.HandleFunc("POST /api/v1/login", s.login)
+	mux.Handle("GET /api/v1/me", s.auth(http.HandlerFunc(s.me)))
+	mux.Handle("POST /api/v1/me/password", s.auth(http.HandlerFunc(s.changePassword)))
+	mux.Handle("GET /api/v1/admin/users", s.auth(http.HandlerFunc(s.adminUsers)))
+	mux.Handle("POST /api/v1/admin/users", s.auth(http.HandlerFunc(s.adminCreateUser)))
+	mux.Handle("PUT /api/v1/admin/users/{id}", s.auth(http.HandlerFunc(s.adminUpdateUser)))
+	mux.Handle("DELETE /api/v1/admin/users/{id}", s.auth(http.HandlerFunc(s.adminDeleteUser)))
 	mux.Handle("GET /api/v1/file", s.auth(http.HandlerFunc(s.file)))
 	mux.Handle("HEAD /api/v1/file", s.auth(http.HandlerFunc(s.file)))
 	mux.Handle("POST /api/v1/link", s.auth(http.HandlerFunc(s.createLink)))
@@ -237,7 +255,7 @@ func (s *server) headers(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; media-src 'self' blob:; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; connect-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; media-src 'self' blob:; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; connect-src 'self' https://api.github.com")
 		next.ServeHTTP(w, r)
 	})
 }

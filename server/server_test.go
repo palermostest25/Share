@@ -32,6 +32,10 @@ func testServer(t *testing.T, dir string) (*server, http.Handler) {
 	c := config{accessKey: testKey, dataDir: dir, listen: ":8080", chunkSize: 4, linkTTL: time.Hour, uploadTTL: time.Hour}
 	mac := sha256.Sum256([]byte("test-link-key"))
 	s := &server{cfg: c, root: root, linkKey: mac[:], started: time.Now(), limiter: newAuthLimiter()}
+	s.users, err = loadUsers(root, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return s, s.routes()
 }
 

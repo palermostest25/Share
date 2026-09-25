@@ -1,38 +1,30 @@
 # Share
 
-Share is a private, streaming network drive for two people. Files remain on the TrueNAS dataset. The native Mac app and built-in web UI browse the server live; neither syncs the drive to the Mac.
+Share is a self-hosted file manager for a TrueNAS dataset. It has a browser UI, a native macOS app, and Windows/Linux desktop packages. It does not sync the drive to the computer. Large video and audio files play through byte-range streaming, so playback and seeking do not first cache the whole file locally.
 
-## TrueNAS setup
+## Run on TrueNAS
 
-1. Create the dataset `/mnt/Tank/Share` and grant UID/GID `568:568` read, write, and modify access.
-2. Copy `Share-server-1.1.0-linux-amd64.tar` to TrueNAS and run `docker load -i Share-server-1.1.0-linux-amd64.tar` from the TrueNAS shell. It loads both `share-server:latest` and `share-server:1.1.0`; Compose uses `latest`.
-3. Generate the shared key with `openssl rand -base64 48` and save it in a password manager.
-4. Keep your Cloudflare container separate. Point its `share.denby.dev` public hostname at `http://<TrueNAS-LAN-IP>:8080`.
-5. Open `deploy/compose.yaml`, replace the `ACCESS_KEY` placeholder, and install it in TrueNAS Apps using **Install via YAML**. No router port forward is required.
-6. Add a Cloudflare cache rule for hostname `share.denby.dev` with **Cache eligibility: Bypass cache**. Enable Always Use HTTPS and minimum TLS 1.2.
-7. Create periodic ZFS snapshots on `Tank/Share`: hourly retained for 48 hours and daily retained for 30 days.
+1. Create `/mnt/Tank/Share` and give UID/GID `568:568` read/write access.
+2. Use [`deploy/compose.yaml`](deploy/compose.yaml) as the TrueNAS Custom App YAML. Replace the `ACCESS_KEY` placeholder with a random bootstrap secret (`openssl rand -hex 32`). The only service is `share`; keep your Cloudflare tunnel in its own container.
+3. The service publishes `8080` on the LAN. Point `share.denby.dev` in your separate Cloudflare tunnel at `http://<TrueNAS-LAN-IP>:8080`. Configure Cloudflare to bypass caching for this hostname and enforce HTTPS for remote access.
+4. Open `https://share.denby.dev`, or `http://<TrueNAS-LAN-IP>:8080` on a trusted LAN. The first visit asks for the bootstrap key, a username, and your own password. That account becomes admin. Further accounts start with **no file access** until the admin shares a file or folder.
+5. Enable ZFS snapshots. Share deletes and replaces files in the live dataset; snapshots are the recovery path.
 
-The web UI is available at `http://<TrueNAS-LAN-IP>:8080` on your LAN and `https://share.denby.dev` remotely. Its key is held in the current browser tab’s session storage; the browser may persist session state, so use **Lock** on a shared computer. Favourites stay in that browser. The Mac app stores the key in Keychain and uses the optional Local URL when it can reach it.
+The GHCR image is `ghcr.io/palermostest25/share:latest` (Linux amd64). On TrueNAS, updating means pulling the latest image and recreating the app. `pull_policy: always` takes effect on deployment/restart; Share deliberately does not have Docker socket access and cannot restart itself. See [TrueNAS setup](deploy/TRUENAS-SETUP.md).
 
-In the Mac app, choose **Show in Finder** to mount the same files as a network volume (normally `/Volumes/Share`). Finder can browse, create folders, move, rename, delete, and open files. If the volume does not appear in Finder’s sidebar, enable **Connected servers** in Finder Settings > Sidebar; the app also opens the mounted volume directly. Finder and Preview control their own caching, so open large videos in the Share app or web player when you must avoid a complete local copy. Those players use byte-range streaming. Non-media files opened in the app are downloaded temporarily; files over 2 GB require confirmation.
+## Use Share
 
-Finder uses the WebDAV URL `/Share/` with username `share` and the same access key as its password. The Mac app mounts the local URL first when available, then the HTTPS remote URL. Finder cannot attach Cloudflare Access service-token headers. If you use Cloudflare Access, mount on LAN or create an appropriate exception for `/Share/`. Large Finder uploads through Cloudflare may hit your Cloudflare plan’s request-size limit; the Share app and web UI use 32 MB upload chunks.
+- The web UI can browse, search within a folder, upload (including dropped folders), cancel uploads, create folders, rename, move, delete, share, and manage accounts. Right-click an item for actions. Folder rows accept dropped files or other Share items.
+- Admins can grant another account read-only or read/write access to an existing file or folder. Grants are enforced by the API and WebDAV server, not only hidden in the UI. Expiring file links remain valid only while their creator still has access. Users can change their own password.
+- The native Mac app browses, uploads, moves, renames, deletes, previews with Space, streams media, and mounts `/Share/` as a WebDAV volume with **Show in Finder**. Finder's sidebar must have **Connected servers** enabled in Finder Settings. WebDAV is a mounted volume, not a File Provider extension; Finder/Preview may cache files they open. For a multi-gigabyte video without a local copy, use the Share app or web player.
+- Windows and Linux packages are built from [`desktop/`](desktop/) and appear on [GitHub Releases](https://github.com/palermostest25/Share/releases). The desktop shell loads the same web UI in an isolated renderer. Windows installer builds check, download, and prompt to apply GitHub Release updates. Linux checks releases and opens the new package for installation.
 
-## Configuration
+Local HTTP is available on private networks, but it is **not encrypted**. Use it only on a trusted LAN; use HTTPS for remote access. Finder may show an “Unsecured Connection” warning when mounting local HTTP. The Mac app prefers the HTTPS mount when reachable and uses LAN WebDAV as a fallback. Cloudflare Access service-token headers cannot be supplied by Finder; if Access is enabled, mount on LAN or configure the route accordingly.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `ACCESS_KEY` | required | Shared secret, at least 32 characters |
-| `DATA_DIR` | `/data` | Shared folder inside the container |
-| `LISTEN_ADDR` | `:8080` | Internal listen address |
-| `CHUNK_SIZE` | `33554432` | Resumable upload chunk size |
-| `LINK_TTL` | `12h` | Signed media-link lifetime |
-| `UPLOAD_TTL` | `24h` | Abandoned-upload lifetime |
+## Updates
 
-Rotate the key by replacing `ACCESS_KEY` in the TrueNAS YAML and redeploying. Paste the new key into both Macs. Rotation immediately invalidates old streaming links.
+The web UI and Mac app check GitHub Releases automatically once a day and also have **Check updates** buttons. The Mac build here is unsigned, so macOS updates are downloaded to Downloads for manual replacement; silent self-update requires Apple signing/notarization. Linux DEB/RPM updates also need a package-manager install. Windows Squirrel builds use Electron's GitHub Release updater.
 
-To restore a deleted or replaced file, clone the appropriate ZFS snapshot or copy the file from the snapshot into the live dataset. Avoid rolling back the whole dataset unless every newer change should also be discarded.
+Releases are built from `v*` tags by GitHub Actions. A separate action publishes the amd64 server image to GHCR on pushes to `main` and version tags. `latest` tracks the latest successful build. Build/test checks are `go test -race ./...` in `server/`, `npm test` in `desktop/`, and an Xcode build in `mac/`.
 
-## Development checks
-
-Run `go test -race ./...` in `server/`. The server uses the Go standard library and `golang.org/x/net/webdav`; the Mac app uses Apple frameworks.
+`ACCESS_KEY` is a bootstrap secret only after the first admin is created. The old shared-key API and WebDAV access are disabled by default after setup. Set `ALLOW_LEGACY_KEY=true` only temporarily if you must migrate an old Mac client, then remove it. Rotate `ACCESS_KEY` if it was ever exposed; rotating it invalidates sessions and signed links, so users must sign in again.

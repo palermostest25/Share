@@ -45,7 +45,7 @@ struct ContentView: View {
             Button("Delete", role: .destructive) { Task { await browser.deleteConfirmed() } }
             Button("Cancel", role: .cancel) { browser.deleteTargets = [] }
         } message: {
-            Text("They’ll be gone for both of you. ZFS snapshots are the recovery path.")
+			Text("They’ll be removed from the NAS for everyone with access. ZFS snapshots are the recovery path.")
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             Task {
@@ -166,11 +166,11 @@ struct SetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Image(systemName: "externaldrive.connected.to.line.below").font(.system(size: 35)).foregroundStyle(.tint); Text("Connect to Share").font(.title.bold()) }
-            Text("Your files remain on the NAS. The key is saved only in macOS Keychain.").foregroundStyle(.secondary)
+			Text("Your files remain on the NAS. Sign in with the account created in the web UI. Credentials stay in macOS Keychain.").foregroundStyle(.secondary)
             SettingsFields()
             if !result.isEmpty { Text(result).foregroundStyle(result == "Connection successful." ? .green : .red) }
             HStack {
-                Button("Test Connection") { test() }.disabled(testing || settings.accessKey.count < 32)
+				Button("Test Connection") { test() }.disabled(testing || !settings.isConfigured)
                 Spacer()
                 Button("Connect") { browser.configured() }.buttonStyle(.borderedProminent).disabled(!settings.isConfigured)
             }

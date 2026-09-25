@@ -59,6 +59,13 @@ final class APIClient: @unchecked Sendable {
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
+	func login(username: String, password: String, settings: ConnectionSettings) async throws -> String {
+		struct Credentials: Encodable { let username: String; let password: String }
+		struct Session: Decodable { let token: String }
+		let body = try encoder.encode(Credentials(username: username, password: password))
+		return try await send(Session.self, request: request(settings, path: "/api/v1/login", method: "POST", body: body)).token
+	}
+
     func list(_ folder: String, settings: ConnectionSettings, timeout: TimeInterval = 30) async throws -> ListResponse {
         let escaped = queryValue(folder)
         return try await send(ListResponse.self, request: request(settings, path: "/api/v1/list?path=\(escaped)", timeout: timeout))

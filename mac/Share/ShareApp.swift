@@ -18,6 +18,7 @@ struct ShareApp: App {
                 .environmentObject(settings)
                 .environmentObject(browser)
                 .frame(minWidth: 820, minHeight: 520)
+				.task { await UpdateChecker.check(silent: true) }
         }
         .commands {
             CommandGroup(after: .newItem) {
@@ -32,6 +33,7 @@ struct ShareApp: App {
                 Button("Refresh") { Task { await browser.refresh() } }
                     .keyboardShortcut("r", modifiers: .command)
             }
+			CommandMenu("Help") { Button("Check for Updates…") { Task { await UpdateChecker.check() } } }
         }
         Settings {
             SettingsView()

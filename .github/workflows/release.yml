@@ -1,0 +1,75 @@
+name: Release apps
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build universal Mac app
+        run: xcodebuild -project mac/Share.xcodeproj -scheme Share -configuration Release -derivedDataPath "$RUNNER_TEMP/share-build" CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=NO ARCHS='arm64 x86_64' build
+      - name: Zip app
+        run: ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/share-build/Build/Products/Release/Share.app" "Share-${GITHUB_REF_NAME#v}-macOS-universal.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-mac
+          path: Share-*-macOS-universal.zip
+          if-no-files-found: error
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install RPM tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - run: npm ci
+      - run: npm test
+      - run: npm run make
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: desktop/out/make/**
+          if-no-files-found: error
+
+  publish:
+    needs: [mac, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          mapfile -d '' assets < <(find release-assets -type f -print0)
+          test "${#assets[@]}" -gt 0
+          for file in "${assets[@]}"; do
+            hash=$(sha256sum "$file" | cut -d ' ' -f 1)
+            printf '%s  %s\n' "$hash" "$(basename "$file")" >> release-assets/SHA256SUMS.txt
+          done
+          assets+=(release-assets/SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" --title "Share $GITHUB_REF_NAME" --generate-notes --verify-tag

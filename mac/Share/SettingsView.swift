@@ -12,6 +12,7 @@ struct SettingsView: View {
             if !result.isEmpty { Text(result).font(.callout).foregroundStyle(result == "Connection successful." ? .green : .red) }
             HStack {
                 Button("Test Connection") { test() }
+				Button("Check for Updates") { Task { await UpdateChecker.check() } }
                 Spacer()
                 Button("Save") { settings.save(); Task { await browser.refresh() } }.buttonStyle(.borderedProminent)
             }
@@ -34,7 +35,10 @@ struct SettingsFields: View {
         Form {
             TextField("Server URL", text: $settings.serverURL, prompt: Text("https://share.denby.dev"))
             TextField("Local URL (optional)", text: $settings.localURL, prompt: Text("http://192.168.1.10:8080"))
-            SecureField("Access key", text: $settings.accessKey)
+			TextField("Username", text: $settings.username)
+			SecureField("Password", text: $settings.password)
+			SecureField("Legacy access key (optional)", text: $settings.accessKey)
+			Text("Create your account in the web UI first. Credentials are kept in macOS Keychain. Local HTTP sign-in sends credentials over your LAN; use a trusted network or HTTPS.").font(.caption).foregroundStyle(.secondary)
             Section("Optional Cloudflare Access") {
                 TextField("Client ID", text: $settings.cloudflareClientID)
                 SecureField("Client secret", text: $settings.cloudflareClientSecret)

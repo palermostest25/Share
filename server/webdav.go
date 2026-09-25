@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/webdav"
 )
 
@@ -21,17 +22,16 @@ func (s *server) webDAV() http.Handler {
 		FileSystem: &rootedDAV{server: s},
 		LockSystem: webdav.NewMemLS(),
 	}
-	want := sha256.Sum256([]byte(s.cfg.accessKey))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		user, password, ok := r.BasicAuth()
+		ip := clientIP(r) + "/dav/" + strings.ToLower(user)
 		now := time.Now()
 		if s.limiter.blocked(ip, now) {
 			http.Error(w, "Too many rejected access keys.", http.StatusTooManyRequests)
 			return
 		}
-		user, password, ok := r.BasicAuth()
-		got := sha256.Sum256([]byte(password))
-		if !ok || user != "share" || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
+		p, valid := s.davPrincipal(user, password)
+		if !ok || !valid {
 			if s.limiter.fail(ip, now) {
 				http.Error(w, "Too many rejected access keys.", http.StatusTooManyRequests)
 				return
@@ -41,8 +41,28 @@ func (s *server) webDAV() http.Handler {
 			return
 		}
 		s.limiter.success(ip)
-		h.ServeHTTP(w, r)
+		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, p)))
 	})
+}
+
+func (s *server) davPrincipal(user, password string) (principal, bool) {
+	if user == "share" {
+		got, want := sha256.Sum256([]byte(password)), sha256.Sum256([]byte(s.cfg.accessKey))
+		if subtle.ConstantTimeCompare(got[:], want[:]) == 1 && (!s.users.initialized() || s.cfg.allowLegacyKey) {
+			return s.legacyPrincipal(), true
+		}
+	}
+	if a, ok := s.users.byToken(password); ok && strings.EqualFold(a.Name, user) {
+		return principal{user: a}, true
+	}
+	s.users.mu.RLock()
+	defer s.users.mu.RUnlock()
+	for _, a := range s.users.users {
+		if strings.EqualFold(a.Name, user) && bcrypt.CompareHashAndPassword([]byte(a.Hash), []byte(password)) == nil {
+			return principal{user: a}, true
+		}
+	}
+	return principal{}, false
 }
 
 type rootedDAV struct{ server *server }
@@ -61,15 +81,18 @@ func (d *rootedDAV) name(raw string, rootAllowed bool, missingLeaf bool) (string
 	return clean, nil
 }
 
-func (d *rootedDAV) Mkdir(_ context.Context, name string, perm os.FileMode) error {
+func (d *rootedDAV) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	clean, err := d.name(name, false, true)
 	if err != nil {
 		return err
 	}
+	if !davAllowed(ctx, clean, true) {
+		return os.ErrPermission
+	}
 	return d.server.root.Mkdir(clean, perm)
 }
 
-func (d *rootedDAV) OpenFile(_ context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+func (d *rootedDAV) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	clean, err := d.name(name, true, flag&os.O_CREATE != 0)
 	if err != nil {
 		return nil, err
@@ -77,22 +100,33 @@ func (d *rootedDAV) OpenFile(_ context.Context, name string, flag int, perm os.F
 	if clean == "." && flag != os.O_RDONLY {
 		return nil, os.ErrPermission
 	}
+	write := flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_APPEND) != 0
+	if write && !davAllowed(ctx, clean, true) {
+		return nil, os.ErrPermission
+	}
+	if !write && !davVisible(ctx, clean) {
+		return nil, os.ErrPermission
+	}
 	f, err := d.server.root.OpenFile(clean, flag, perm)
 	if err != nil {
 		return nil, err
 	}
-	return &davFile{File: f, root: d.server.root, name: clean}, nil
+	p, _ := ctx.Value(principalContextKey{}).(principal)
+	return &davFile{File: f, root: d.server.root, name: clean, principal: p}, nil
 }
 
-func (d *rootedDAV) RemoveAll(_ context.Context, name string) error {
+func (d *rootedDAV) RemoveAll(ctx context.Context, name string) error {
 	clean, err := d.name(name, false, false)
 	if err != nil {
 		return err
 	}
+	if !davAllowed(ctx, clean, true) {
+		return os.ErrPermission
+	}
 	return d.server.root.RemoveAll(clean)
 }
 
-func (d *rootedDAV) Rename(_ context.Context, oldName, newName string) error {
+func (d *rootedDAV) Rename(ctx context.Context, oldName, newName string) error {
 	oldPath, err := d.name(oldName, false, false)
 	if err != nil {
 		return err
@@ -101,24 +135,40 @@ func (d *rootedDAV) Rename(_ context.Context, oldName, newName string) error {
 	if err != nil {
 		return err
 	}
+	if !davAllowed(ctx, oldPath, true) || !davAllowed(ctx, newPath, true) {
+		return os.ErrPermission
+	}
 	if oldPath == newPath || strings.HasPrefix(newPath, oldPath+"/") {
 		return os.ErrInvalid
 	}
 	return d.server.root.Rename(oldPath, newPath)
 }
 
-func (d *rootedDAV) Stat(_ context.Context, name string) (os.FileInfo, error) {
+func (d *rootedDAV) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	clean, err := d.name(name, true, false)
 	if err != nil {
 		return nil, err
 	}
+	if !davVisible(ctx, clean) {
+		return nil, os.ErrPermission
+	}
 	return d.server.root.Stat(clean)
+}
+
+func davAllowed(ctx context.Context, clean string, write bool) bool {
+	p, _ := ctx.Value(principalContextKey{}).(principal)
+	return p.allowed(clean, write)
+}
+func davVisible(ctx context.Context, clean string) bool {
+	p, _ := ctx.Value(principalContextKey{}).(principal)
+	return p.visible(clean)
 }
 
 type davFile struct {
 	*os.File
-	root *os.Root
-	name string
+	root      *os.Root
+	name      string
+	principal principal
 }
 
 func (f *davFile) Readdir(count int) ([]os.FileInfo, error) {
@@ -126,7 +176,7 @@ func (f *davFile) Readdir(count int) ([]os.FileInfo, error) {
 	visible := []os.FileInfo{}
 	for count <= 0 || len(visible) < count {
 		items, err := f.File.Readdir(1)
-		if len(items) != 0 && items[0].Name() != ".nasdrive" && items[0].Mode()&os.ModeSymlink == 0 {
+		if len(items) != 0 && items[0].Name() != ".nasdrive" && items[0].Mode()&os.ModeSymlink == 0 && f.principal.visible(strings.TrimPrefix(f.name+"/"+items[0].Name(), "./")) {
 			visible = append(visible, items[0])
 		}
 		if err != nil {

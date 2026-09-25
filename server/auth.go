@@ -1,8 +1,7 @@
 package main
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
+	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -76,11 +75,11 @@ func (l *authLimiter) prune(now time.Time) {
 }
 
 func (s *server) auth(next http.Handler) http.Handler {
-	want := sha256.Sum256([]byte(s.cfg.accessKey))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		ip := clientIP(r)
-		if s.limiter.blocked(ip, now) {
+		limitLegacy := !s.users.initialized() || s.cfg.allowLegacyKey
+		if limitLegacy && s.limiter.blocked(ip, now) {
 			writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many rejected access keys. Try again later.")
 			return
 		}
@@ -89,16 +88,18 @@ func (s *server) auth(next http.Handler) http.Handler {
 		if strings.HasPrefix(header, "Bearer ") {
 			key = strings.TrimPrefix(header, "Bearer ")
 		}
-		got := sha256.Sum256([]byte(key))
-		if subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
-			if s.limiter.fail(ip, now) {
+		p, ok := s.authenticateBearer(key)
+		if !ok {
+			if limitLegacy && s.limiter.fail(ip, now) {
 				writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many rejected access keys. Try again later.")
 			} else {
 				writeError(w, http.StatusUnauthorized, "unauthorized", "Access key rejected.")
 			}
 			return
 		}
-		s.limiter.success(ip)
-		next.ServeHTTP(w, r)
+		if limitLegacy {
+			s.limiter.success(ip)
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, p)))
 	})
 }

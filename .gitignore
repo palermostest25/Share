@@ -8,6 +8,7 @@ xcuserdata/
 DerivedData/
 node_modules/
 dist/
+out/
 .env
 .env.*
 !*.example

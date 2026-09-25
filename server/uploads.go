@@ -18,6 +18,7 @@ var uploadIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type uploadMeta struct {
 	ID        string     `json:"id"`
+	Owner     string     `json:"owner,omitempty"`
 	Path      string     `json:"path"`
 	Size      int64      `json:"size"`
 	Modified  *time.Time `json:"modified,omitempty"`
@@ -52,6 +53,9 @@ func (s *server) startUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_request", "The upload path or size is invalid.")
 		return
 	}
+	if !requireAccess(w, r, clean, true) {
+		return
+	}
 	parent := path.Dir(clean)
 	if err := s.rejectSymlink(parent, false); err != nil {
 		s.fsError(w, err)
@@ -84,7 +88,7 @@ func (s *server) startUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "internal", "Could not create the upload.")
 		return
 	}
-	meta := uploadMeta{ID: id, Path: displayPath(clean), Size: req.Size, Modified: req.Modified, Created: time.Now().UTC(), Overwrite: req.Overwrite}
+	meta := uploadMeta{ID: id, Owner: currentPrincipal(r).user.ID, Path: displayPath(clean), Size: req.Size, Modified: req.Modified, Created: time.Now().UTC(), Overwrite: req.Overwrite}
 	b, _ := json.Marshal(meta)
 	part, err := s.root.OpenFile(uploadPart(id), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
 	if err != nil {
@@ -128,6 +132,9 @@ func (s *server) uploadStatus(w http.ResponseWriter, r *http.Request) {
 		s.fsError(w, err)
 		return
 	}
+	if !s.uploadAllowed(w, r, meta) {
+		return
+	}
 	writeJSON(w, 200, map[string]any{"id": id, "path": meta.Path, "size": meta.Size, "received": received})
 }
 
@@ -138,6 +145,9 @@ func (s *server) uploadChunk(w http.ResponseWriter, r *http.Request) {
 	meta, received, err := s.readUpload(id)
 	if err != nil {
 		s.fsError(w, err)
+		return
+	}
+	if !s.uploadAllowed(w, r, meta) {
 		return
 	}
 	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
@@ -195,6 +205,9 @@ func (s *server) completeUpload(w http.ResponseWriter, r *http.Request) {
 		s.fsError(w, err)
 		return
 	}
+	if !s.uploadAllowed(w, r, meta) {
+		return
+	}
 	if received != meta.Size {
 		writeJSON(w, 409, map[string]any{"error": "incomplete", "message": "The upload is not complete.", "received": received})
 		return
@@ -238,10 +251,32 @@ func (s *server) abortUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	unlock := s.lockUpload(id)
 	defer unlock()
+	meta, _, err := s.readUpload(id)
+	if err != nil {
+		s.fsError(w, err)
+		return
+	}
+	if !s.uploadAllowed(w, r, meta) {
+		return
+	}
 	_ = s.root.Remove(uploadPart(id))
 	_ = s.root.Remove(uploadJSON(id))
 	s.uploadLocks.Delete(id)
 	w.WriteHeader(204)
+}
+
+func (s *server) uploadAllowed(w http.ResponseWriter, r *http.Request, meta uploadMeta) bool {
+	p := currentPrincipal(r)
+	if meta.Owner != p.user.ID && !(meta.Owner == "" && p.legacy) {
+		writeError(w, 403, "forbidden", "This upload belongs to another account.")
+		return false
+	}
+	clean, err := cleanRequestPath(meta.Path, false)
+	if err != nil {
+		writeError(w, 400, "bad_path", "Upload path is invalid.")
+		return false
+	}
+	return requireAccess(w, r, clean, true)
 }
 
 func (s *server) cleanupLoop() {

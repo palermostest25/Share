@@ -4,12 +4,12 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 SERVER_DIR="$PROJECT_DIR/server"
-OUTPUT="$PROJECT_DIR/Share-server-1.1.0-linux-amd64.tar"
+OUTPUT="$PROJECT_DIR/Share-server-1.2.0-linux-amd64.tar"
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/share-image.XXXXXX")
 trap 'rm -rf "$BUILD_DIR"' EXIT HUP INT TERM
 
 cd "$SERVER_DIR"
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "$BUILD_DIR/nasdrive" .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=1.2.0" -o "$BUILD_DIR/nasdrive" .
 
 mkdir -p "$BUILD_DIR/rootfs" "$BUILD_DIR/archive/layer"
 cp "$BUILD_DIR/nasdrive" "$BUILD_DIR/rootfs/nasdrive"

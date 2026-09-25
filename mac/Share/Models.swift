@@ -91,10 +91,10 @@ enum ShareError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL: return "Enter a valid HTTPS server URL."
-        case .unauthorized: return "Access key rejected."
+		case .unauthorized: return "Sign-in failed or session expired. Check your username and password in Settings."
         case .server(_, let message, _): return message
         case .externalPlayerMissing: return "Install IINA or VLC to stream this format, or download it instead."
-        case .finderMountFailed(let code): return "Could not mount Share in Finder (error \(code)). Check the server address and access key."
+		case .finderMountFailed(let code): return "Could not mount Share in Finder (error \(code)). Check the server address and account credentials."
         case .finderAccessUnsupported: return "Finder cannot supply Cloudflare Access service tokens. Connect on the local network or exempt /Share/ from that Access policy."
         }
     }

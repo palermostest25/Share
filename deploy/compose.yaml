@@ -1,7 +1,7 @@
 services:
   share:
-    image: share-server:latest
-    pull_policy: never
+    image: ghcr.io/palermostest25/share:latest
+    pull_policy: always
     restart: unless-stopped
     user: "568:568"
     read_only: true

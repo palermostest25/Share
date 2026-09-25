@@ -5,6 +5,7 @@
   padding: 8px 18px 12px;
   background: var(--panel);
 }
+[hidden] { display: none !important; }
 #transfers h2 { margin: 0 0 4px; color: var(--muted); font-size: 12px; }
 #transfer-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 12px; }
 .transfer { min-width: 0; }
@@ -12,3 +13,27 @@
 .transfer-name { flex: 1; min-width: 0; }
 .transfer-cancel { padding: 2px 7px; font-size: 11px; }
 .transfer small { display: block; color: var(--muted); margin-top: 4px; }
+
+table { table-layout: fixed; }
+th:first-child, td:first-child { width: auto; min-width: 0; }
+.entry-name { overflow: hidden; }
+tr.entry { outline: none; }
+tr.entry:focus-visible { outline: 2px solid var(--accent2); outline-offset: -2px; }
+tr.drop-target { background: #173831; outline: 2px dashed var(--accent); outline-offset: -3px; }
+#drop-hint { margin: 12px 24px 0; padding: 18px; border: 2px dashed var(--accent); border-radius: 12px; color: var(--accent); text-align: center; background: #102722; }
+#context-menu { position: fixed; z-index: 20; min-width: 190px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: #202938; box-shadow: 0 16px 50px #000a; }
+#context-menu button { display: block; width: 100%; border: 0; background: transparent; text-align: left; }
+#context-menu button:hover { background: #344258; }
+#admin-dialog { width: min(720px, calc(100vw - 28px)); max-width: none; max-height: min(85vh, 850px); overflow: auto; }
+.admin-content { padding: 0 22px 22px; }
+.admin-content > p { margin-top: 0; }
+.user-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 10px 0; }
+.user-head, .grant { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.user-head strong, .grant span { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+.user-head button, .grant button { font-size: 12px; padding: 5px 8px; }
+.user-grants { margin-top: 8px; color: var(--muted); }
+.grant { padding-top: 7px; }
+#user-form { min-width: 0; border-top: 1px solid var(--line); margin-top: 22px; padding: 12px 0 0; }
+#user-form label { margin: 12px 0; }
+#user-form input { width: 100%; }
+@media(max-width: 760px) { th:last-child { width: 95px; } .row-actions button { padding: 5px 7px; } #drop-hint { margin: 10px; } }

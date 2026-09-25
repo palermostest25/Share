@@ -18,13 +18,16 @@
       <button id="new-folder">New folder</button>
       <label class="primary" for="upload-input">Upload</label>
       <input id="upload-input" type="file" multiple hidden>
-      <button id="logout" title="Forget access key">Lock</button>
+      <button id="account">Password</button>
+      <button id="admin" hidden>Users</button>
+      <button id="updates">Check updates</button>
+      <button id="logout" title="Sign out">Sign out</button>
     </nav>
   </header>
 
   <main>
     <aside>
-      <button id="all-files" class="side active">All files</button>
+      <button id="all-files" class="side active">Files shared with me</button>
       <button id="favourite-current" class="side">☆ Favourite folder</button>
       <h2>Favourites</h2>
       <div id="favourites"></div>
@@ -36,6 +39,7 @@
         <input id="filter" type="search" placeholder="Filter this folder" autocomplete="off">
       </div>
       <div id="notice" hidden></div>
+      <div id="drop-hint" hidden>Drop files here to upload</div>
       <div class="table-wrap">
         <table>
           <thead><tr><th data-sort="name">Name</th><th data-sort="size">Size</th><th data-sort="modified">Modified</th><th>Actions</th></tr></thead>
@@ -55,10 +59,12 @@
     <form method="dialog" id="login-form">
       <div class="dialog-brand"><span class="mark">S</span></div>
       <h1>Open Share</h1>
-      <p>Enter the shared access key. Share keeps it in this tab’s session storage until you lock it or close the tab.</p>
-      <label>Access key<input id="access-key" type="password" minlength="32" required autocomplete="current-password"></label>
+      <p id="login-help">Sign in with your Share account.</p>
+      <label id="bootstrap-field" hidden>Bootstrap access key<input id="access-key" type="password" autocomplete="off"></label>
+      <label>Username<input id="username" type="text" minlength="2" maxlength="64" required autocomplete="username"></label>
+      <label>Password<input id="password" type="password" minlength="12" required autocomplete="current-password"></label>
       <p class="error" id="login-error" hidden></p>
-      <button class="primary" value="default">Connect</button>
+      <button class="primary" value="default" id="login-submit">Sign in</button>
     </form>
   </dialog>
 
@@ -75,6 +81,31 @@
       <div class="dialog-actions"><button value="cancel">Cancel</button><button id="confirm-ok" class="danger" value="ok">Delete</button></div>
     </form>
   </dialog>
+
+  <dialog id="text-dialog">
+    <form method="dialog" id="text-form">
+      <h2 id="text-title">Name</h2>
+      <p id="text-help"></p>
+      <label id="text-label">Name<input id="text-value" type="text" required maxlength="255" autocomplete="off"></label>
+	  <div class="dialog-actions"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="admin-dialog">
+    <div class="media-head"><strong>People and access</strong><button id="admin-close">Close</button></div>
+    <div class="admin-content">
+      <p>New accounts see nothing until you share a file or folder. Grants apply to everything inside a folder.</p>
+      <div id="user-list"></div>
+      <form id="user-form">
+        <h3>Add person</h3>
+        <label>Username<input id="new-username" required minlength="2" maxlength="64"></label>
+        <label>Temporary password<input id="new-password" required minlength="12" type="password"></label>
+        <button class="primary">Create account</button>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="context-menu" hidden role="menu"></div>
 
   <script src="/assets/app.js" defer></script>
 </body>

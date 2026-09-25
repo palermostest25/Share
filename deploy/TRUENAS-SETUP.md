@@ -1,29 +1,13 @@
-# Install Share on TrueNAS
+# TrueNAS setup (Linux amd64)
 
-This package is prepared for an `amd64` TrueNAS 24.10-or-newer server and the dataset `/mnt/Tank/Share`.
+Create the dataset `Tank/Share` at `/mnt/Tank/Share`. Give the apps user/group `568:568` read, write, execute, and modify rights. Configure periodic ZFS snapshots before moving important files in.
 
-1. In **Datasets**, create `Tank/Share`. Give the built-in apps user and group (`568:568`) read, write, execute, and modify access.
-2. Copy `Share-server-1.1.0-linux-amd64.tar` onto the TrueNAS box. In **System Settings > Shell**, load it:
+Use the full [`compose.yaml`](compose.yaml) in TrueNAS **Apps → Custom App → Install via YAML**. Replace its bootstrap-key placeholder with `openssl rand -hex 32` output. Keep the key in a password manager and do not commit a filled-in Compose file to GitHub. The Compose file has exactly one service and exposes port 8080 on the LAN. Your Cloudflare tunnel stays separate and targets `http://<TrueNAS-LAN-IP>:8080` for hostname `share.denby.dev`; no router port forward is required. Bypass Cloudflare caching for Share.
 
-   ```sh
-   docker load -i /path/to/Share-server-1.1.0-linux-amd64.tar
-   ```
+Open `https://share.denby.dev` to create the first admin with the bootstrap key, username, and password. Creating a new account does **not** expose the drive. In **Users**, create additional accounts; right-click a file or folder to share it, then adjust read-only/read/write grants in **Users**. Local access is `http://<TrueNAS-LAN-IP>:8080`; HTTP credentials and file data are not encrypted on the LAN.
 
-   The result must include `share-server:latest` (the archive also keeps `share-server:1.1.0`).
+To update, use TrueNAS **Update/Redeploy** for the custom app, or run `docker compose pull` followed by `docker compose up -d` in a directory containing the filled-in YAML. The image is `ghcr.io/palermostest25/share:latest` and `pull_policy: always` is set. A running container cannot replace itself, so the **Check updates** button links to the release; it does not mutate Docker. Do not mount `/var/run/docker.sock` into Share.
 
-3. On the Mac, generate the shared key and save it in a password manager:
+Install the current Mac app or Windows/Linux packages from [GitHub Releases](https://github.com/palermostest25/Share/releases). The Mac app's **Show in Finder** button mounts WebDAV. If it opens the volume but no sidebar item appears, turn on **Connected servers** in Finder Settings → Sidebar. Finder and Preview can cache opened files; use Share's player for large videos that must remain streamed. HTTPS WebDAV avoids the local HTTP warning; the app tries it first.
 
-   ```sh
-   openssl rand -base64 48
-   ```
-
-4. Keep your existing Cloudflare container separate. Point its `share.denby.dev` public hostname at `http://<TrueNAS-LAN-IP>:8080`.
-5. In Cloudflare, add a Cache Rule matching hostname `share.denby.dev` and choose **Bypass cache**. Enable **Always Use HTTPS** and minimum TLS 1.2.
-6. Open `compose.yaml` and replace the `ACCESS_KEY` placeholder with the shared key.
-7. In TrueNAS **Apps**, choose **Discover Apps > Custom App > Install via YAML** (wording varies slightly by release), paste the entire Compose file, and install it.
-8. Visit `http://<TrueNAS-LAN-IP>:8080` on your LAN or `https://share.denby.dev` remotely. In `Share.app`, the remote URL is prefilled; set **Local URL** to the LAN address and paste the key. Use **Show in Finder** to mount a network volume at `/Volumes/Share`.
-9. Under **Data Protection**, create snapshot tasks for `Tank/Share`: hourly retained 48 hours and daily retained 30 days.
-
-Compose publishes port 8080 on the TrueNAS LAN. The separate Cloudflare container uses that address; no router port forward is needed. The Mac app tries the local URL first and falls back to `share.denby.dev` when away. Local HTTP carries the shared key on your LAN, so use only a trusted local network. Video and audio links support HTTP byte ranges, so playback and seeking do not download the whole file to the Mac.
-
-Version 1.1.0 adds the Finder mount endpoint. If an older `share-server` image is already imported, load this new archive and update/recreate the TrueNAS app using the `share-server:latest` Compose tag. Finder may cache opened files; use the Share app or browser player for large videos when local storage matters. Finder remote uploads may be constrained by Cloudflare request limits, while Share uploads use resumable 32 MB chunks.
+If you upgraded from the old single-key version, the original key still bootstraps first-admin setup. After an account exists, the key no longer grants normal API/WebDAV access unless `ALLOW_LEGACY_KEY=true` is explicitly set for a short migration. Install the new Mac app and sign in with your account before disabling any temporary legacy mode.
