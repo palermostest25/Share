@@ -14,13 +14,13 @@ struct SettingsView: View {
                 Button("Test Connection") { test() }
 				Button("Check for Updates") { Task { await UpdateChecker.check() } }
                 Spacer()
-                Button("Save") { settings.save(); Task { await browser.refresh() } }.buttonStyle(.borderedProminent)
+                Button("Save") { settings.save(); browser.resetConnection(); Task { await browser.refresh() } }.buttonStyle(.borderedProminent)
             }
         }
     }
 
     private func test() {
-        settings.save(); result = "Testing…"
+        settings.save(); browser.resetConnection(); result = "Testing…"
         Task {
             await browser.refresh()
             result = browser.errorMessage ?? "Connection successful."

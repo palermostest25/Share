@@ -85,6 +85,7 @@ struct ContentView: View {
             Spacer()
             if browser.isLoading { ProgressView().controlSize(.small) }
             if let name = browser.previewingName { Text("Preparing preview: \(name)").foregroundStyle(.secondary) }
+            if browser.finderMountURL != nil { Label("Finder connected", systemImage: "externaldrive.fill").foregroundStyle(.secondary) }
             if !browser.uploads.isEmpty {
                 Button { showingTransfers.toggle() } label: {
                     Label(browser.hasRunningUploads ? "Transfers running" : "Transfers", systemImage: "arrow.up.circle")
@@ -167,6 +168,10 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Image(systemName: "externaldrive.connected.to.line.below").font(.system(size: 35)).foregroundStyle(.tint); Text("Connect to Share").font(.title.bold()) }
 			Text("Your files remain on the NAS. Sign in with the account created in the web UI. Credentials stay in macOS Keychain.").foregroundStyle(.secondary)
+            if settings.username.isEmpty && !settings.accessKey.isEmpty {
+                Text("The old shared key cannot connect after the first admin account is created. Enter your Share username and password below to mount Finder.")
+                    .font(.callout).foregroundStyle(.orange)
+            }
             SettingsFields()
             if !result.isEmpty { Text(result).foregroundStyle(result == "Connection successful." ? .green : .red) }
             HStack {

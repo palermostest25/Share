@@ -1,7 +1,7 @@
 {
   "name": "share-desktop",
   "productName": "Share",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Share file manager for Windows and Linux",
   "author": "palermostest25",

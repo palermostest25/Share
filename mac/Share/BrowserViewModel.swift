@@ -30,6 +30,8 @@ final class BrowserViewModel: ObservableObject {
     private var activity: NSObjectProtocol?
     private var usingLocal = false
 	private var signedInCredentials = ""
+    private var automaticFinderMountAttempted = false
+    private var openFinderOnNextAutomaticMount = false
     private var pendingUploads: [PendingFile] = []
     private var activeUploadTasks: [UUID: Task<Void, Never>] = [:]
     private var retryableUploads: [UUID: PendingFile] = [:]
@@ -68,7 +70,15 @@ final class BrowserViewModel: ObservableObject {
     func configured() {
         settings.save()
         showSetup = false
+        resetConnection()
         Task { await refresh() }
+    }
+
+    func resetConnection() {
+        signedInCredentials = ""
+        automaticFinderMountAttempted = false
+        openFinderOnNextAutomaticMount = true
+        finderMountURL = nil
     }
 
 	private func ensureSignedIn() async throws {
@@ -87,23 +97,18 @@ final class BrowserViewModel: ObservableObject {
 		signedInCredentials = digest
 	}
 
-    func showInFinder() {
+    func showInFinder(openFinder: Bool = true) {
+        if let url = finderMountURL, FileManager.default.fileExists(atPath: url.path) {
+            if openFinder { NSWorkspace.shared.open(url) }
+            return
+        }
         guard !isMountingFinder else { return }
         isMountingFinder = true
         Task {
             defer { isMountingFinder = false }
             do {
 				try await ensureSignedIn()
-                let connection: ConnectionSettings
-				let remote = try settings.snapshot()
-				let remoteAvailable: Bool
-				if settings.cloudflareClientID.isEmpty { remoteAvailable = (try? await api.list("/", settings: remote, timeout: 3)) != nil }
-				else { remoteAvailable = false }
-				if remoteAvailable { connection = remote }
-				else if let local = try? settings.snapshot(local: true) {
-					_ = try await api.list("/", settings: local, timeout: 2)
-					connection = local
-				} else { throw settings.cloudflareClientID.isEmpty ? ShareError.invalidURL : ShareError.finderAccessUnsupported }
+                let connection = try await finderConnection()
                 guard let davURL = URL(string: "/Share/", relativeTo: connection.baseURL)?.absoluteURL else {
                     throw ShareError.invalidURL
                 }
@@ -120,9 +125,34 @@ final class BrowserViewModel: ObservableObject {
                 }.value
                 let url = URL(fileURLWithPath: mountedPath, isDirectory: true)
                 finderMountURL = url
-                NSWorkspace.shared.open(url)
+                if openFinder { NSWorkspace.shared.open(url) }
             } catch { errorMessage = "Finder: \(error.localizedDescription)" }
         }
+    }
+
+    private func finderConnection() async throws -> ConnectionSettings {
+        let remote = try settings.snapshot()
+        if settings.cloudflareClientID.isEmpty {
+            do {
+                _ = try await api.list("/", settings: remote, timeout: 3)
+                return remote
+            } catch {
+                guard let local = try? settings.snapshot(local: true) else { throw error }
+                _ = try await api.list("/", settings: local, timeout: 2)
+                return local
+            }
+        }
+        guard let local = try? settings.snapshot(local: true) else { throw ShareError.finderAccessUnsupported }
+        _ = try await api.list("/", settings: local, timeout: 2)
+        return local
+    }
+
+    private func maybeMountInFinder() {
+        guard !automaticFinderMountAttempted, finderMountURL == nil else { return }
+        automaticFinderMountAttempted = true
+        let openFinder = openFinderOnNextAutomaticMount
+        openFinderOnNextAutomaticMount = false
+        showInFinder(openFinder: openFinder)
     }
 
     func refresh(silently: Bool = false) async {
@@ -139,6 +169,7 @@ final class BrowserViewModel: ObservableObject {
                     connectionLabel = "Local network"
                     entries = result.entries
                     errorMessage = nil
+                    maybeMountInFinder()
                     return
                 } catch ShareError.unauthorized {
                     throw ShareError.unauthorized
@@ -150,7 +181,16 @@ final class BrowserViewModel: ObservableObject {
             connectionLabel = "Remote"
             entries = result.entries
             errorMessage = nil
-		} catch { if case ShareError.unauthorized = error { signedInCredentials = ""; settings.sessionToken = ""; settings.save() }; errorMessage = error.localizedDescription }
+            maybeMountInFinder()
+		} catch {
+            if case ShareError.unauthorized = error {
+                signedInCredentials = ""
+                settings.sessionToken = ""
+                settings.save()
+                if settings.username.isEmpty { showSetup = true }
+            }
+            errorMessage = error.localizedDescription
+        }
     }
 
     func navigate(to newPath: String) async {
