@@ -68,7 +68,8 @@ async function connect(raw) {
   // Set the origin before navigation. Every subsequent navigation is constrained to it.
   serverOrigin = origin;
   saveOrigin(origin);
-  await win.loadURL(origin);
+  try { await win.loadURL(origin); }
+  catch (error) { showConnect(); dialog.showErrorBox('Could not connect', error.message); return false; }
   return true;
 }
 
@@ -90,13 +91,14 @@ function createWindow() {
   const menu = Menu.buildFromTemplate([
     { label: 'File', submenu: [{ label: 'Change server…', click: showConnect }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-    { label: 'View', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] }
-		,{ label: 'Help', submenu: [{ label: 'Check for updates…', click: checkUpdates }, { label: 'GitHub Releases', click: () => shell.openExternal('https://github.com/palermostest25/Share/releases') }] }
+    { label: 'View', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
+		{ label: 'Help', submenu: [{ label: 'Check for updates…', click: checkUpdates }, { label: 'GitHub Releases', click: () => shell.openExternal('https://github.com/palermostest25/Share/releases') }] }
   ]);
   Menu.setApplicationMenu(menu);
   const saved = readOrigin();
   if (saved && saved.startsWith('https:')) { serverOrigin = saved; win.loadURL(saved).catch(showConnect); }
-  else showConnect();
+	else if (saved) connect(saved).then(ok => { if (!ok) showConnect(); }).catch(showConnect);
+	else showConnect();
 }
 
 if (squirrelStartup) app.quit();
