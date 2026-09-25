@@ -65,6 +65,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
+          while IFS= read -r -d '' file; do
+            mv -- "$file" "${file// /.}"
+          done < <(find release-assets -type f -name '* *' -print0)
           mapfile -d '' assets < <(find release-assets -type f -print0)
           test "${#assets[@]}" -gt 0
           for file in "${assets[@]}"; do
