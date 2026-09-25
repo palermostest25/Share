@@ -1,6 +1,7 @@
 services:
   share:
     image: ghcr.io/palermostest25/share:latest
+    platform: linux/amd64
     pull_policy: always
     restart: unless-stopped
     user: "568:568"
