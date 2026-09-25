@@ -127,6 +127,13 @@ func TestAccountsAndSharedOnlyPermissions(t *testing.T) {
 	if w.Code == 200 {
 		t.Fatal("DAV private read succeeded")
 	}
+	put := httptest.NewRequest("PUT", "/Share/public/write.txt", strings.NewReader("not allowed"))
+	put.SetBasicAuth("guest", "a sufficiently long password")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, put)
+	if w.Code < 400 {
+		t.Fatalf("DAV read-only write=%d", w.Code)
+	}
 	if got := accountRequest(t, h, "PUT", "/api/v1/admin/users/"+user.ID, adminSession.Token, `{"grants":[]}`).Code; got != 200 {
 		t.Fatalf("revoke=%d", got)
 	}

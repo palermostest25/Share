@@ -5,6 +5,7 @@
   "private": true,
   "description": "Share file manager for Windows and Linux",
   "author": "palermostest25",
+  "license": "UNLICENSED",
   "repository": "https://github.com/palermostest25/Share",
   "main": "main.js",
   "scripts": {
