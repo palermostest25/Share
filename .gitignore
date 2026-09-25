@@ -1,0 +1,13 @@
+.DS_Store
+._*
+*.tar
+*.zip
+*.app/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+node_modules/
+dist/
+.env
+.env.*
+!*.example

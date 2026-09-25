@@ -1,0 +1,14 @@
+#transfers {
+  border-top: 1px solid var(--line);
+  max-height: 210px;
+  overflow: auto;
+  padding: 8px 18px 12px;
+  background: var(--panel);
+}
+#transfers h2 { margin: 0 0 4px; color: var(--muted); font-size: 12px; }
+#transfer-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 12px; }
+.transfer { min-width: 0; }
+.transfer-head { display: flex; align-items: center; gap: 8px; }
+.transfer-name { flex: 1; min-width: 0; }
+.transfer-cancel { padding: 2px 7px; font-size: 11px; }
+.transfer small { display: block; color: var(--muted); margin-top: 4px; }

@@ -1,0 +1,26 @@
+services:
+  share:
+    image: share-server:latest
+    pull_policy: never
+    restart: unless-stopped
+    user: "568:568"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    environment:
+      ACCESS_KEY: "REPLACE_WITH_AT_LEAST_32_RANDOM_CHARACTERS"
+      DATA_DIR: /data
+      LISTEN_ADDR: :8080
+      CHUNK_SIZE: "33554432"
+      LINK_TTL: 12h
+      UPLOAD_TTL: 24h
+    volumes:
+      - type: bind
+        source: /mnt/Tank/Share
+        target: /data
+    ports:
+      - "8080:8080"
