@@ -85,7 +85,7 @@ document.addEventListener('click',ev=>{if(!$('#context-menu').contains(ev.target
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')$('#context-menu').hidden=true});
 
 async function downloadEntry(e){try{const a=document.createElement('a');a.href=await signed(join(state.path,e.name));a.download=e.name;document.body.append(a);a.click();a.remove()}catch(err){message(err.message)}}
-async function copyLink(e){try{await navigator.clipboard.writeText(await signed(join(state.path,e.name)));message('Link copied. It expires in 12 hours and anyone with it can access this file.')}catch(err){message(err.message)}}
+async function copyLink(e){try{const url=await signed(join(state.path,e.name));if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(url);else{const input=document.createElement('textarea');input.value=url;document.body.append(input);input.select();const copied=document.execCommand('copy');input.remove();if(!copied){await askText('Copy share link',url,'Select and copy this link. It expires in 12 hours.');return}}message('Link copied. It expires in 12 hours and anyone with it can access this file.')}catch(err){message(err.message)}}
 
 function askText(title,value='',help='',secret=false){
 	return new Promise(resolve=>{const d=$('#text-dialog'),input=$('#text-value');$('#text-title').textContent=title;$('#text-help').textContent=help;input.type=secret?'password':'text';input.value=value;d.returnValue='cancel';d.showModal();input.focus();input.select();d.addEventListener('close',()=>resolve(d.returnValue==='ok'?input.value.trim():null),{once:true})})
