@@ -23,6 +23,12 @@ func (s *server) webDAV() http.Handler {
 		LockSystem: webdav.NewMemLS(),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Finder probes OPTIONS before sending credentials. Its capability
+		// response contains no file data, and must not consume auth attempts.
+		if r.Method == http.MethodOptions {
+			h.ServeHTTP(w, r)
+			return
+		}
 		user, password, ok := r.BasicAuth()
 		ip := clientIP(r) + "/dav/" + strings.ToLower(user)
 		now := time.Now()

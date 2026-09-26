@@ -25,6 +25,12 @@ func davRequest(t *testing.T, h http.Handler, method, target string, body []byte
 func TestWebDAVFinderOperations(t *testing.T) {
 	dir := t.TempDir()
 	_, h := testServer(t, dir)
+	for i := 0; i < 12; i++ {
+		options := davRequest(t, h, "OPTIONS", "/Share/", nil, "")
+		if options.Code != 200 || options.Header().Get("DAV") == "" {
+			t.Fatalf("unauthenticated capability probe %d: status=%d DAV=%q", i, options.Code, options.Header().Get("DAV"))
+		}
+	}
 	if got := davRequest(t, h, "PROPFIND", "/Share/", nil, "").Code; got != 401 {
 		t.Fatalf("no auth=%d", got)
 	}
