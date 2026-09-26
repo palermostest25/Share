@@ -233,6 +233,10 @@ func (s *server) web(w http.ResponseWriter, r *http.Request) {
 		name = "web/manifest.webmanifest"
 	} else if r.URL.Path == "/assets/icon.svg" {
 		name = "web/icon.svg"
+	} else if r.URL.Path == "/assets/icon-192.png" {
+		name = "web/icon-192.png"
+	} else if r.URL.Path == "/assets/icon-512.png" {
+		name = "web/icon-512.png"
 	} else if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -253,6 +257,8 @@ func (s *server) web(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json; charset=utf-8")
 	case ".svg":
 		w.Header().Set("Content-Type", "image/svg+xml")
+	case ".png":
+		w.Header().Set("Content-Type", "image/png")
 	}
 	_, _ = w.Write(b)
 }

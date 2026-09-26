@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		E8381BD902D10E3002FF43A3 /* ShareMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348437B1339A96B3C6DD0717 /* ShareMobileApp.swift */; };
+		EFD87F26FD13B50DEC351F52 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6691D03A617714A9FB0AE13C /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		26C49AE53E4F66B8D3E912C5 /* ShareMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ShareMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		348437B1339A96B3C6DD0717 /* ShareMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMobileApp.swift; sourceTree = "<group>"; };
+		6691D03A617714A9FB0AE13C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		68B2E662C76A8EF33B780ED6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -20,6 +22,7 @@
 		0B9B7D177CFCA4FDCC913DFF /* ShareMobile */ = {
 			isa = PBXGroup;
 			children = (
+				6691D03A617714A9FB0AE13C /* Assets.xcassets */,
 				68B2E662C76A8EF33B780ED6 /* Info.plist */,
 				348437B1339A96B3C6DD0717 /* ShareMobileApp.swift */,
 			);
@@ -50,6 +53,7 @@
 			buildConfigurationList = 9B6D2120F6E1DA8734E1CCE0 /* Build configuration list for PBXNativeTarget "ShareMobile" */;
 			buildPhases = (
 				A45EC1CB70D610D6E57F4AEF /* Sources */,
+				F9074D8EB9F2EE4C901D7946 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -91,6 +95,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F9074D8EB9F2EE4C901D7946 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EFD87F26FD13B50DEC351F52 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A45EC1CB70D610D6E57F4AEF /* Sources */ = {
