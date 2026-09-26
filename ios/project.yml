@@ -1,0 +1,19 @@
+name: ShareMobile
+options:
+  bundleIdPrefix: dev.denby
+targets:
+  ShareMobile:
+    type: application
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+      - path: ShareMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.denby.share.mobile
+        INFOPLIST_FILE: ShareMobile/Info.plist
+        SWIFT_VERSION: '5.0'
+        TARGETED_DEVICE_FAMILY: '1,2'
+        SUPPORTS_MACCATALYST: NO
+        MARKETING_VERSION: '1.3.0'
+        CURRENT_PROJECT_VERSION: '130'

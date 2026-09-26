@@ -1,14 +1,26 @@
 import SwiftUI
+import ServiceManagement
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var browser: BrowserViewModel
     @State private var result = ""
+    @State private var openAtLogin = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Share Settings").font(.title2.bold())
             SettingsFields()
+            Toggle("Keep Share in the menu bar after login", isOn: $openAtLogin)
+                .onChange(of: openAtLogin) { _, enabled in
+                    do {
+                        if enabled { try SMAppService.mainApp.register() }
+                        else { try SMAppService.mainApp.unregister() }
+                    } catch {
+                        result = "Login item: \(error.localizedDescription)"
+                        openAtLogin = SMAppService.mainApp.status == .enabled
+                    }
+                }
             if !result.isEmpty { Text(result).font(.callout).foregroundStyle(result == "Connection successful." ? .green : .red) }
             HStack {
                 Button("Test Connection") { test() }
@@ -17,6 +29,7 @@ struct SettingsView: View {
                 Button("Save") { settings.save(); browser.resetConnection(); Task { await browser.refresh() } }.buttonStyle(.borderedProminent)
             }
         }
+        .onAppear { openAtLogin = SMAppService.mainApp.status == .enabled }
     }
 
     private func test() {

@@ -4,7 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#10131a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Share">
   <title>Share</title>
+  <link rel="manifest" href="/assets/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
   <link rel="stylesheet" href="/assets/app.css">
   <link rel="stylesheet" href="/assets/transfers.css">
 </head>
@@ -54,6 +58,26 @@
       <footer><span id="count">0 items</span><span>Files stay on your NAS</span></footer>
     </section>
   </main>
+
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <button id="mobile-files" type="button" aria-label="Files"><span aria-hidden="true">📁</span><small>Files</small></button>
+    <button id="mobile-favourites" type="button" aria-label="Favourites"><span aria-hidden="true">☆</span><small>Favourites</small></button>
+    <label id="mobile-upload-label" for="upload-input" role="button" tabindex="0" aria-label="Upload files"><span aria-hidden="true">↑</span><small>Upload</small></label>
+    <button id="mobile-transfers" type="button" aria-label="Transfers"><span aria-hidden="true">⇅</span><small>Transfers</small></button>
+    <button id="mobile-more" type="button" aria-label="More actions"><span aria-hidden="true">⋯</span><small>More</small></button>
+  </nav>
+
+  <dialog id="mobile-actions-dialog" aria-label="More actions">
+    <div class="media-head"><strong>Share actions</strong><button id="mobile-actions-close" type="button">Close</button></div>
+    <div class="mobile-actions-list">
+      <button id="mobile-new-folder" type="button">New folder</button>
+      <button id="mobile-favourite-current" type="button">Favourite this folder</button>
+      <button id="mobile-account" type="button">Change password</button>
+      <button id="mobile-admin" type="button" hidden>People and access</button>
+      <button id="mobile-updates" type="button">Check updates</button>
+      <button id="mobile-logout" type="button">Sign out</button>
+    </div>
+  </dialog>
 
   <dialog id="login-dialog">
     <form method="dialog" id="login-form">

@@ -30,8 +30,8 @@ final class BrowserViewModel: ObservableObject {
     private var activity: NSObjectProtocol?
     private var usingLocal = false
 	private var signedInCredentials = ""
-    private var automaticFinderMountAttempted = false
-    private var openFinderOnNextAutomaticMount = false
+    private var nextFinderMountAttempt = Date.distantPast
+    private var finderRetryDelay: TimeInterval = 15
     private var pendingUploads: [PendingFile] = []
     private var activeUploadTasks: [UUID: Task<Void, Never>] = [:]
     private var retryableUploads: [UUID: PendingFile] = [:]
@@ -45,8 +45,9 @@ final class BrowserViewModel: ObservableObject {
         showSetup = !settings.isConfigured
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
-                if NSApp.isActive { await self?.refresh(silently: true) }
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled else { break }
+                await self?.refresh(silently: true)
             }
         }
     }
@@ -76,9 +77,40 @@ final class BrowserViewModel: ObservableObject {
 
     func resetConnection() {
         signedInCredentials = ""
-        automaticFinderMountAttempted = false
-        openFinderOnNextAutomaticMount = true
-        finderMountURL = nil
+        nextFinderMountAttempt = .distantPast
+        finderRetryDelay = 15
+    }
+
+    func resetFinderRetry() {
+        nextFinderMountAttempt = .distantPast
+        finderRetryDelay = 15
+    }
+
+    private func isFinderMounted(_ url: URL) -> Bool {
+        var info = statfs()
+        guard statfs(url.path, &info) == 0 else { return false }
+        var mountName = info.f_mntonname
+        var filesystemName = info.f_fstypename
+        var sourceName = info.f_mntfromname
+        let mountNameLength = MemoryLayout.size(ofValue: mountName)
+        let filesystemNameLength = MemoryLayout.size(ofValue: filesystemName)
+        let sourceNameLength = MemoryLayout.size(ofValue: sourceName)
+        let mountedAt = withUnsafePointer(to: &mountName) {
+            $0.withMemoryRebound(to: CChar.self, capacity: mountNameLength) { String(cString: $0) }
+        }
+        let filesystem = withUnsafePointer(to: &filesystemName) {
+            $0.withMemoryRebound(to: CChar.self, capacity: filesystemNameLength) { String(cString: $0) }
+        }
+        let source = withUnsafePointer(to: &sourceName) {
+            $0.withMemoryRebound(to: CChar.self, capacity: sourceNameLength) { String(cString: $0) }
+        }
+        return mountedAt == url.path && filesystem == "webdav" &&
+            (source.hasSuffix("/Share/") || source.hasSuffix("/Share"))
+    }
+
+    private func existingFinderMount() -> URL? {
+        let url = URL(fileURLWithPath: "/Volumes/Share", isDirectory: true)
+        return isFinderMounted(url) ? url : nil
     }
 
 	private func ensureSignedIn() async throws {
@@ -98,10 +130,12 @@ final class BrowserViewModel: ObservableObject {
 	}
 
     func showInFinder(openFinder: Bool = true) {
-        if let url = finderMountURL, FileManager.default.fileExists(atPath: url.path) {
+        if finderMountURL == nil { finderMountURL = existingFinderMount() }
+        if let url = finderMountURL, isFinderMounted(url) {
             if openFinder { NSWorkspace.shared.open(url) }
             return
         }
+        finderMountURL = nil
         guard !isMountingFinder else { return }
         isMountingFinder = true
         Task {
@@ -116,7 +150,9 @@ final class BrowserViewModel: ObservableObject {
 				let davUsername = settings.username.isEmpty ? "share" : settings.username
                 let mountedPath = try await Task.detached(priority: .userInitiated) { () throws -> String in
                     var points: Unmanaged<CFArray>?
-					let status = NetFSMountURLSync(davURL as CFURL, nil, davUsername as CFString, key as CFString, nil, nil, &points)
+                    // A /Volumes mount is presented in Finder's Locations. The
+                    // WebDAV endpoint's last path component is "Share".
+					let status = NetFSMountURLSync(davURL as CFURL, URL(fileURLWithPath: "/Volumes", isDirectory: true) as CFURL, davUsername as CFString, key as CFString, nil, nil, &points)
                     guard status == 0 else { throw ShareError.finderMountFailed(Int(status)) }
                     guard let path = (points?.takeRetainedValue() as? [String])?.first else {
                         throw ShareError.finderMountFailed(-1)
@@ -125,8 +161,14 @@ final class BrowserViewModel: ObservableObject {
                 }.value
                 let url = URL(fileURLWithPath: mountedPath, isDirectory: true)
                 finderMountURL = url
+                finderRetryDelay = 15
+                nextFinderMountAttempt = .distantPast
                 if openFinder { NSWorkspace.shared.open(url) }
-            } catch { errorMessage = "Finder: \(error.localizedDescription)" }
+            } catch {
+                nextFinderMountAttempt = Date().addingTimeInterval(finderRetryDelay)
+                finderRetryDelay = min(finderRetryDelay * 2, 300)
+                if openFinder { errorMessage = "Finder: \(error.localizedDescription)" }
+            }
         }
     }
 
@@ -148,11 +190,11 @@ final class BrowserViewModel: ObservableObject {
     }
 
     private func maybeMountInFinder() {
-        guard !automaticFinderMountAttempted, finderMountURL == nil else { return }
-        automaticFinderMountAttempted = true
-        let openFinder = openFinderOnNextAutomaticMount
-        openFinderOnNextAutomaticMount = false
-        showInFinder(openFinder: openFinder)
+        if finderMountURL == nil { finderMountURL = existingFinderMount() }
+        if let url = finderMountURL, isFinderMounted(url) { return }
+        finderMountURL = nil
+        guard !isMountingFinder, Date() >= nextFinderMountAttempt else { return }
+        showInFinder(openFinder: false)
     }
 
     func refresh(silently: Bool = false) async {
@@ -183,6 +225,7 @@ final class BrowserViewModel: ObservableObject {
             errorMessage = nil
             maybeMountInFinder()
 		} catch {
+            connectionLabel = "Offline"
             if case ShareError.unauthorized = error {
                 signedInCredentials = ""
                 settings.sessionToken = ""

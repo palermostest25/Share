@@ -32,7 +32,7 @@ import (
 
 //go:embed web/*
 var webFiles embed.FS
-var version = "1.2.1"
+var version = "1.3.0"
 
 type config struct {
 	accessKey      string
@@ -229,6 +229,10 @@ func (s *server) web(w http.ResponseWriter, r *http.Request) {
 		name = "web/transfers.css"
 	} else if r.URL.Path == "/assets/app.js" {
 		name = "web/app.js"
+	} else if r.URL.Path == "/assets/manifest.webmanifest" {
+		name = "web/manifest.webmanifest"
+	} else if r.URL.Path == "/assets/icon.svg" {
+		name = "web/icon.svg"
 	} else if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -245,6 +249,10 @@ func (s *server) web(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	case ".js":
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	case ".webmanifest":
+		w.Header().Set("Content-Type", "application/manifest+json; charset=utf-8")
+	case ".svg":
+		w.Header().Set("Content-Type", "image/svg+xml")
 	}
 	_, _ = w.Write(b)
 }

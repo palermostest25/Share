@@ -1,0 +1,13 @@
+{
+  "name": "Share",
+  "short_name": "Share",
+  "description": "Your files on your own NAS",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d1016",
+  "theme_color": "#10131a",
+  "icons": [
+    {"src": "/assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

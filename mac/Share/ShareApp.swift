@@ -13,7 +13,7 @@ struct ShareApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Share", id: "main") {
             ContentView()
                 .environmentObject(settings)
                 .environmentObject(browser)
@@ -42,11 +42,65 @@ struct ShareApp: App {
                 .frame(width: 520)
                 .padding(22)
         }
+        MenuBarExtra("Share", systemImage: "externaldrive.connected.to.line.below") {
+            ShareMenuBarContent()
+                .environmentObject(settings)
+                .environmentObject(browser)
+        }
+    }
+}
+
+private struct ShareMenuBarContent: View {
+    @Environment(\.openWindow) private var openWindow
+    @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var browser: BrowserViewModel
+
+    var body: some View {
+        Button("Open Share") {
+            NSApp.setActivationPolicy(.regular)
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Button(browser.isMountingFinder ? "Connecting Finder…" : "Show Share in Finder") {
+            browser.showInFinder()
+        }
+        .disabled(!settings.isConfigured || browser.isMountingFinder)
+        Button("Reconnect Finder") {
+            browser.resetFinderRetry()
+            Task { await browser.refresh(silently: true) }
+        }
+        .disabled(!settings.isConfigured || browser.isMountingFinder)
+        Divider()
+        Text(browser.finderMountURL == nil ? "Finder: disconnected" : "Finder: connected")
+        Text(browser.hasRunningUploads ? "Uploads in progress" : browser.connectionLabel)
+        Divider()
+        SettingsLink { Text("Settings…") }
+        Button("Check for Updates…") { Task { await UpdateChecker.check() } }
+        Divider()
+        Button("Quit Share") { NSApp.terminate(nil) }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { _ in
+            DispatchQueue.main.async {
+                let hasVisibleWindow = NSApp.windows.contains { $0.isVisible && !$0.isMiniaturized }
+                if !hasVisibleWindow { NSApp.setActivationPolicy(.accessory) }
+            }
+        }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        sender.setActivationPolicy(.regular)
+        return true
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let browser = BrowserViewModel.shared else { return .terminateNow }
         if browser.hasRunningUploads {

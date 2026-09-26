@@ -18,7 +18,7 @@ enum UpdateChecker {
         do {
             var request = URLRequest(url: URL(string: "https://api.github.com/repos/palermostest25/Share/releases/latest")!)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("ShareMac/1.2.1", forHTTPHeaderField: "User-Agent")
+            request.setValue("ShareMac/1.3.0", forHTTPHeaderField: "User-Agent")
             let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
             let release = try JSONDecoder().decode(Release.self, from: data)

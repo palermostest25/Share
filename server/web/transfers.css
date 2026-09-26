@@ -37,3 +37,71 @@ tr.drop-target { background: #173831; outline: 2px dashed var(--accent); outline
 #user-form label { margin: 12px 0; }
 #user-form input { width: 100%; }
 @media(max-width: 760px) { th:last-child { width: 95px; } .row-actions button { padding: 5px 7px; } #drop-hint { margin: 10px; } }
+
+.entry-meta, .mobile-nav { display: none; }
+
+@media (max-width: 760px) {
+  body { min-height: 100dvh; }
+  button, label.primary { touch-action: manipulation; }
+  input { font-size: 16px; }
+  header { height: 58px; min-height: 58px; align-items: center; padding: 0 12px; gap: 8px; }
+  .brand { gap: 8px; font-size: 18px; }
+  .brand strong { display: inline; }
+  .mark { width: 30px; height: 30px; border-radius: 9px; }
+  .actions { flex-wrap: nowrap; gap: 5px; }
+  .actions button { min-width: 38px; min-height: 38px; padding: 4px; }
+  .actions #new-folder, .actions label.primary, .actions #account,
+  .actions #admin, .actions #updates, .actions #logout { display: none; }
+  main { display: block; height: calc(100dvh - 58px - 72px - env(safe-area-inset-bottom)); min-height: 280px; }
+  .browser { height: 100%; }
+  aside { position: fixed; z-index: 12; top: 58px; bottom: calc(72px + env(safe-area-inset-bottom));
+    left: 0; width: min(82vw, 310px); padding: 14px; transform: translateX(-105%);
+    transition: transform .2s ease; box-shadow: 18px 0 40px #0009; }
+  aside.mobile-open { display: block; transform: translateX(0); }
+  .pathbar { min-height: 94px; padding: 8px 12px; gap: 6px; }
+  #breadcrumbs { flex-basis: 100%; min-height: 32px; }
+  #breadcrumbs button { min-height: 36px; }
+  #filter { width: 100%; height: 38px; }
+  .table-wrap { padding: 0 8px; }
+  table, tbody { display: block; width: 100%; }
+  thead { display: none; }
+  tr.entry { display: flex; align-items: center; min-height: 68px; width: 100%; border-bottom: 1px solid var(--line); }
+  td { display: block; border: 0; padding: 9px 6px; }
+  td:first-child { flex: 1; min-width: 0; }
+  td:nth-child(2), td:nth-child(3) { display: none; }
+  td:last-child { width: 52px; flex: 0 0 52px; }
+  .entry-name { min-height: 28px; gap: 9px; }
+  .entry-name span:last-child { font-size: 15px; }
+  .entry-meta { display: block; margin-left: 37px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-actions button:first-child { display: none; }
+  .row-actions button:last-child { min-width: 44px; min-height: 44px; font-size: 22px; }
+  #empty { padding: 60px 14px; }
+  #transfers { max-height: 42dvh; padding: 8px; }
+  #transfer-list { display: block; }
+  footer { min-height: 32px; padding: 6px 12px; }
+  footer span:last-child { display: none; }
+  #notice { margin: 8px 12px 0; }
+  #context-menu.mobile-sheet { left: 8px !important; right: 8px; width: auto; max-height: 65dvh; overflow: auto;
+    border-radius: 18px; padding: 8px; box-shadow: 0 0 0 100vmax #0007, 0 20px 60px #000b; }
+  #context-menu.mobile-sheet button { min-height: 48px; font-size: 15px; }
+  .mobile-nav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 10;
+    left: 0; right: 0; bottom: 0; min-height: calc(72px + env(safe-area-inset-bottom));
+    padding: 5px 4px calc(5px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
+    background: #111823f2; backdrop-filter: blur(18px); }
+  .mobile-nav button, .mobile-nav label { display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1px; min-width: 0; min-height: 55px; padding: 3px;
+    border: 0; border-radius: 9px; background: transparent; color: var(--text); text-align: center; }
+  .mobile-nav span { font-size: 23px; line-height: 1; }
+  .mobile-nav small { font-size: 10px; color: var(--muted); }
+  .mobile-nav [aria-disabled="true"] { opacity: .4; }
+  #mobile-actions-dialog { position: fixed; inset: auto 8px calc(76px + env(safe-area-inset-bottom));
+    width: auto; max-width: none; max-height: 70dvh; overflow: auto; margin: 0; border-radius: 18px; }
+  .mobile-actions-list { display: grid; gap: 3px; padding: 3px 10px 12px; }
+  .mobile-actions-list button { min-height: 48px; text-align: left; border: 0; background: transparent; }
+  dialog { max-height: calc(100dvh - 20px); overflow: auto; }
+  dialog form { min-width: 0; width: min(420px, calc(100vw - 30px)); padding: 20px; }
+  #media-dialog { width: calc(100vw - 12px); max-width: none; }
+  video { max-height: calc(100dvh - 150px); }
+  #admin-dialog { max-height: calc(100dvh - 24px); }
+  .admin-content { padding: 0 14px 14px; }
+}
