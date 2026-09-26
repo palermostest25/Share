@@ -1,5 +1,5 @@
 FROM golang:1.26.4-alpine AS build
-ARG VERSION=1.3.0
+ARG VERSION=1.3.1
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY *.go ./

@@ -113,6 +113,28 @@ final class BrowserViewModel: ObservableObject {
         return isFinderMounted(url) ? url : nil
     }
 
+    func unmountFinder() -> Bool {
+        if isMountingFinder {
+            errorMessage = "Wait for Finder to finish connecting before quitting Share."
+            return false
+        }
+        guard let url = existingFinderMount() else {
+            finderMountURL = nil
+            return true
+        }
+        do {
+            try NSWorkspace.shared.unmountAndEjectDevice(at: url)
+            finderMountURL = nil
+            return true
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Could not disconnect Share from Finder"
+            alert.informativeText = "Close files open from Share, then try Quit again. \(error.localizedDescription)"
+            alert.runModal()
+            return false
+        }
+    }
+
 	private func ensureSignedIn() async throws {
 		guard !settings.username.isEmpty else { return }
 		let digest = SHA256.hash(data: Data((settings.username + "\0" + settings.password).utf8)).map { String(format: "%02x", $0) }.joined()
@@ -198,7 +220,9 @@ final class BrowserViewModel: ObservableObject {
     }
 
     func refresh(silently: Bool = false) async {
+        if settings.isLoadingCredentials { return }
         guard settings.isConfigured else { showSetup = true; return }
+        showSetup = false
         if !silently { isLoading = true }
         defer { isLoading = false }
         do {

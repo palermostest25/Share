@@ -32,7 +32,7 @@ import (
 
 //go:embed web/*
 var webFiles embed.FS
-var version = "1.3.0"
+var version = "1.3.1"
 
 type config struct {
 	accessKey      string

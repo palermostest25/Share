@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class SettingsStore: ObservableObject {
+    static weak var shared: SettingsStore?
+    @Published var isLoadingCredentials = true
     @Published var serverURL: String
     @Published var localURL: String
     @Published var accessKey: String
@@ -16,13 +18,28 @@ final class SettingsStore: ObservableObject {
     init() {
         serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://share.denby.dev"
         localURL = UserDefaults.standard.string(forKey: "localURL") ?? ""
-        accessKey = Keychain.read("access-key")
+		accessKey = ""
 		username = UserDefaults.standard.string(forKey: "username") ?? ""
-		password = Keychain.read("account-password")
-		sessionToken = Keychain.read("session-token")
+		password = ""
+		sessionToken = ""
         cloudflareClientID = UserDefaults.standard.string(forKey: "cloudflareClientID") ?? ""
-        cloudflareClientSecret = Keychain.read("cloudflare-client-secret")
+        cloudflareClientSecret = ""
         externalPlayerPath = UserDefaults.standard.string(forKey: "externalPlayerPath") ?? Self.detectPlayer()
+        Self.shared = self
+    }
+
+    func loadCredentials() async {
+        let credentials = await Task.detached(priority: .userInitiated) {
+            (
+                Keychain.read("access-key"),
+                Keychain.read("account-password"),
+                Keychain.read("session-token"),
+                Keychain.read("cloudflare-client-secret")
+            )
+        }.value
+        guard isLoadingCredentials else { return }
+        (accessKey, password, sessionToken, cloudflareClientSecret) = credentials
+        isLoadingCredentials = false
     }
 
     var isConfigured: Bool {
@@ -30,6 +47,7 @@ final class SettingsStore: ObservableObject {
     }
 
     func save() {
+        isLoadingCredentials = false
         serverURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         UserDefaults.standard.set(serverURL, forKey: "serverURL")
         localURL = localURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))

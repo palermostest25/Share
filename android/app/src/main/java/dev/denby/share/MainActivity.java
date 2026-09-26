@@ -9,10 +9,13 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Build;
+import android.graphics.Insets;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.URLUtil;
@@ -44,6 +47,20 @@ public final class MainActivity extends Activity {
         base = getPreferences(MODE_PRIVATE).getString("server", REMOTE);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+            int top;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Insets bars = windowInsets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+            } else {
+                top = windowInsets.getSystemWindowInsetTop();
+                bottom = windowInsets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(0, top, 0, bottom);
+            return windowInsets;
+        });
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
         progress.setVisibility(View.GONE);
@@ -51,6 +68,7 @@ public final class MainActivity extends Activity {
         browser = new WebView(this);
         layout.addView(browser, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(layout);
+        layout.requestApplyInsets();
 
         WebSettings settings = browser.getSettings();
         settings.setJavaScriptEnabled(true);

@@ -8,17 +8,36 @@ struct ShareApp: App {
 
     init() {
         let settings = SettingsStore()
+        let browser = BrowserViewModel(settings: settings)
         _settings = StateObject(wrappedValue: settings)
-        _browser = StateObject(wrappedValue: BrowserViewModel(settings: settings))
+        _browser = StateObject(wrappedValue: browser)
     }
 
     var body: some Scene {
+        MenuBarExtra("Share", systemImage: "externaldrive.connected.to.line.below") {
+            ShareMenuBarContent()
+                .environmentObject(settings)
+                .environmentObject(browser)
+        }
+        .menuBarExtraStyle(.menu)
+        mainWindow
+            .defaultLaunchBehavior(.suppressed)
+            .restorationBehavior(.disabled)
+        Settings {
+            SettingsView()
+                .environmentObject(settings)
+                .environmentObject(browser)
+                .frame(width: 520)
+                .padding(22)
+        }
+    }
+
+    private var mainWindow: some Scene {
         WindowGroup("Share", id: "main") {
             ContentView()
                 .environmentObject(settings)
                 .environmentObject(browser)
                 .frame(minWidth: 820, minHeight: 520)
-				.task { await UpdateChecker.check(silent: true) }
         }
         .commands {
             CommandGroup(after: .newItem) {
@@ -35,29 +54,17 @@ struct ShareApp: App {
             }
 			CommandMenu("Help") { Button("Check for Updates…") { Task { await UpdateChecker.check() } } }
         }
-        Settings {
-            SettingsView()
-                .environmentObject(settings)
-                .environmentObject(browser)
-                .frame(width: 520)
-                .padding(22)
-        }
-        MenuBarExtra("Share", systemImage: "externaldrive.connected.to.line.below") {
-            ShareMenuBarContent()
-                .environmentObject(settings)
-                .environmentObject(browser)
-        }
     }
 }
 
 private struct ShareMenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var updateStatus = UpdateStatus.shared
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var browser: BrowserViewModel
 
     var body: some View {
         Button("Open Share") {
-            NSApp.setActivationPolicy(.regular)
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -71,11 +78,12 @@ private struct ShareMenuBarContent: View {
         }
         .disabled(!settings.isConfigured || browser.isMountingFinder)
         Divider()
-        Text(browser.finderMountURL == nil ? "Finder: disconnected" : "Finder: connected")
+        Text(settings.isLoadingCredentials ? "Waiting for macOS Keychain…" : browser.finderMountURL == nil ? "Finder: disconnected" : "Finder: connected")
         Text(browser.hasRunningUploads ? "Uploads in progress" : browser.connectionLabel)
         Divider()
         SettingsLink { Text("Settings…") }
-        Button("Check for Updates…") { Task { await UpdateChecker.check() } }
+        Button(updateStatus.message ?? "Check for Updates…") { Task { await UpdateChecker.check() } }
+            .disabled(updateStatus.message != nil)
         Divider()
         Button("Quit Share") { NSApp.terminate(nil) }
     }
@@ -84,21 +92,20 @@ private struct ShareMenuBarContent: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: nil, queue: .main
-        ) { _ in
-            DispatchQueue.main.async {
-                let hasVisibleWindow = NSApp.windows.contains { $0.isVisible && !$0.isMiniaturized }
-                if !hasVisibleWindow { NSApp.setActivationPolicy(.accessory) }
-            }
+        NSApp.setActivationPolicy(.accessory)
+        Task {
+            await UpdateChecker.check(silent: true)
+        }
+        Task {
+            await SettingsStore.shared?.loadCredentials()
+            await BrowserViewModel.shared?.refresh(silently: true)
         }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        sender.setActivationPolicy(.regular)
-        return true
+        false
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -111,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.addButton(withTitle: "Quit Anyway")
             if alert.runModal() == .alertFirstButtonReturn { return .terminateCancel }
         }
+        if !browser.unmountFinder() { return .terminateCancel }
         browser.clearTemporaryFiles()
         return .terminateNow
     }
